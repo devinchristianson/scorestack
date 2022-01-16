@@ -5,11 +5,9 @@ import (
 	"os/signal"
 	"runtime"
 	"sync"
-	"time"
 
 	"github.com/scorestack/scorestack/dynamicbeat/pkg/check"
 	"github.com/scorestack/scorestack/dynamicbeat/pkg/checksource"
-	"github.com/scorestack/scorestack/dynamicbeat/pkg/config"
 	"github.com/scorestack/scorestack/dynamicbeat/pkg/run"
 	"go.uber.org/zap"
 )
@@ -17,7 +15,7 @@ import (
 // Run starts dynamicbeat.
 func TestChecks(f *checksource.Filesystem) error {
 	zap.S().Infof("dynamicbeat is running to test checks! Hit CTRL-C to stop it.")
-	c := config.Get()
+
 	// Set up CTRL+C handler
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
@@ -39,53 +37,37 @@ func TestChecks(f *checksource.Filesystem) error {
 	published := make(chan uint64)
 	go publishTestEvents(results, published)
 
-	ticker := time.NewTicker(c.RoundTime)
 	var wg sync.WaitGroup
 
+	// Making quit handles in goroutine because we don't need the for look anymore (when running one round)
+	go func() {
+		<-quit
+		// Purposefully don't wait for checks.RunChecks goroutines to exit because that could take 30s
+		//wg.Wait()
+
+		// Close the event publishing queue so the publishEvents goroutine will exit
+		close(results)
+
+		// Wait for all events to be published
+		<-published
+		close(published)
+		os.Exit(1)
+	}()
+
 	// The logic for running a round is moved here so that it can be executed immediately as well as per the ticker
-	runRound := func() {
-		zap.S().Infof("Number of goroutines: %d", runtime.NumGoroutine())
-		zap.S().Infof("Starting a series of %d checks", len(defs))
-
-		// Start the goroutine
-		started := make(chan bool)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			run.Round(defs, results, started)
-		}()
-
-		// Wait until all the checks have been started before we refresh
-		// the checks from Elasticsearch to make sure that we don't
-		// overwrite the check definitions while they're in use.
-		// TODO: determine if it's possible to overwrite the defs while
-		// they're in use by the above function
-		<-started
-		zap.S().Infof("Started series of checks")
-
-		// Update the check definitions for the next round
-		defs, err = f.LoadAll()
-		if err != nil {
-			zap.S().Warnf("Failed to update check definitions : %s", err)
-		}
-	}
-	runRound()
-	for {
-		select {
-		case <-quit:
-			// Purposefully dont wait for checks.RunChecks goroutines to exit so the user doesn't have to wait up to 30s
-			//wg.Wait()
-			// Close the event publishing queue so the publishEvents goroutine will exit
-			close(results)
-
-			// Wait for all events to be published
-			<-published
-			close(published)
-			return nil
-		case <-ticker.C:
-			runRound()
-		}
-	}
+	zap.S().Infof("Number of goroutines: %d", runtime.NumGoroutine())
+	zap.S().Infof("Starting a series of %d checks", len(defs))
+	// Start the goroutine
+	started := make(chan bool)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		run.Round(defs, results, started)
+	}()
+	<-started
+	zap.S().Infof("Started series of checks")
+	wg.Wait()
+	return nil
 }
 
 func publishTestEvents(results <-chan check.Result, out chan<- uint64) {
