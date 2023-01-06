@@ -3,7 +3,7 @@
     "indices": [
       {
         "names": [
-          "results-{{.Team}}"
+          "results-{{ .Name }}"
         ],
         "privileges": [
           "read"
@@ -11,7 +11,7 @@
       },
       {
         "names": [
-          "attrib_user_{{.Team}}"
+          "attrib_user_{{ .Name }}"
         ],
         "privileges": [
           "read",
