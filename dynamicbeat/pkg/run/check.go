@@ -3,6 +3,7 @@ package run
 import (
 	"bytes"
 	"context"
+	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -58,7 +59,11 @@ func Check(ctx context.Context, def check.Config) check.Result {
 func unpackDef(config check.Config) (check.Check, error) {
 	// Render any template strings in the definition
 	var renderedJSON []byte
-	templ := template.New("definition")
+	templ := template.New("definition").Funcs(template.FuncMap{
+		"base64Encode": func(data string) string {
+			return b64.StdEncoding.EncodeToString([]byte(data))
+		},
+	})
 	templ, err := templ.Parse(string(config.Definition))
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse template for check: %s", err.Error())
