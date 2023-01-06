@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"github.com/scorestack/scorestack/dynamicbeat/pkg/assets"
+	"github.com/scorestack/scorestack/dynamicbeat/pkg/config"
 )
 
 func AttributeAdmin() io.Reader {
@@ -26,6 +27,6 @@ func Spectator() io.Reader {
 	return assets.Read("roles/spectator.json")
 }
 
-func Team(name string) io.Reader {
-	return assets.ReadTeam("roles/team.json", name)
+func Team(team config.Team) io.Reader {
+	return assets.ReadTeam("roles/team.json", team)
 }

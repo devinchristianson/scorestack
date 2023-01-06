@@ -1,7 +1,7 @@
 {
-  "password": "{{or .DefaultUserPassword `changeme`}}",
+  "password": "{{or .Overrides.DefaultUserPassword `changeme`}}",
   "roles": [
     "common",
-    "{{.Team}}"
+    "{{ .Name }}"
   ]
 }

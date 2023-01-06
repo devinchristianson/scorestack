@@ -87,7 +87,7 @@ func Kibana(host string, user string, pass string, verify bool, teams []config.T
 	}
 
 	for _, team := range teams {
-		err = c.AddRole(team.Name, roles.Team(team.Name))
+		err = c.AddRole(team.Name, roles.Team(team))
 		if err != nil {
 			zap.S().Errorf("failed to add role for %s: %s", team.Name, err)
 		}

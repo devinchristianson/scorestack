@@ -7,6 +7,8 @@ import (
 	"text/template"
 
 	"go.uber.org/zap"
+
+	"github.com/scorestack/scorestack/dynamicbeat/pkg/config"
 )
 
 //go:embed *
@@ -21,16 +23,12 @@ func Read(filename string) io.Reader {
 	return bytes.NewReader(data)
 }
 
-func ReadTeam(filename string, name string) io.Reader {
+func ReadTeam(filename string, team config.Team) io.Reader {
 	data, err := f.ReadFile(filename)
 	if err != nil {
 		zap.S().Panicf("failed to read embedded asset %s: %s", filename, err)
 	}
 
-	// Template in the team name
-	vars := struct {
-		Team string
-	}{name}
 	tmpl, err := template.New("").Parse(string(data))
 	if err != nil {
 		zap.S().Panicf("failed to read asset %s as template: %s", filename, err)
@@ -38,9 +36,9 @@ func ReadTeam(filename string, name string) io.Reader {
 
 	// Apply the template and write to a byte buffer
 	var buf bytes.Buffer
-	err = tmpl.Execute(&buf, vars)
+	err = tmpl.Execute(&buf, team)
 	if err != nil {
-		zap.S().Panicf("failed to template team %s into asset %s: %s", name, filename, err)
+		zap.S().Panicf("failed to template team %s into asset %s: %s", team.Name, filename, err)
 	}
 
 	return bytes.NewReader(buf.Bytes())
