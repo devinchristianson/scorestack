@@ -1,5 +1,5 @@
 {
-  "password": "{{or (index . 'DefaultUserPassword') 'changeme'}}",
+  "password": "{{or (index . DefaultUserPassword) 'changeme'}}",
   "roles": [
     "common",
     "{{.Team}}"
