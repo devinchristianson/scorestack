@@ -32,6 +32,7 @@ func NewElasticsearch(host string, username string, password string, verify bool
 
 	es, err := elasticsearch.NewClient(c)
 	if err != nil {
+		zap.S().Errorf("failed to create Elasticsearch client: %s", err)
 		return nil, fmt.Errorf("failed to create Elasticsearch client: %s", err)
 	}
 
