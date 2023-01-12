@@ -23,6 +23,7 @@ import (
 type Definition struct {
 	Config               check.Config // generic metadata about the check
 	Verify               string       `optiontype:"optional"` // whether HTTPS certs should be validated
+	DontFollowRedirects  bool         `optiontype:"optional"`
 	ReportMatchedContent string       `optiontype:"optional"` // whether the matched content should be returned in the CheckResult
 	Requests             []*Request   `optiontype:"list"`     // a list of requests to make
 }
@@ -40,6 +41,8 @@ type Request struct {
 	Code         int               `optiontype:"optional" optiondefault:"200"` // the response status code to match
 	MatchContent bool              `optiontype:"optional"`                     // whether the response body must match a defined regex for the check to pass
 	ContentRegex string            `optiontype:"optional" optiondefault:".*"`  // regex for the response body to match
+	MatchHeaders bool              `optiontype:"optional"`                     // whether the headers must match a defined regex for the check to pass
+	HeadersRegex map[string]string `optiontype:"optional"`                     // map of regex for the response body to match
 	StoreValue   bool              `optiontype:"optional"`                     // whether the matched content should be saved for use in a later request
 }
 
@@ -51,6 +54,16 @@ func (d *Definition) Run(ctx context.Context) check.Result {
 	// Convert strings to booleans to allow templating
 	verify, _ := strconv.ParseBool(d.Verify)
 	reportMatchedContent, _ := strconv.ParseBool(d.ReportMatchedContent)
+
+	// generate redirect policy based on config
+	var checkRedirects func(req *http.Request, via []*http.Request) error
+	if d.DontFollowRedirects {
+		checkRedirects = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	} else {
+		checkRedirects = nil
+	}
 
 	// Configure HTTP client
 	cookieJar, err := cookiejar.New(nil)
@@ -68,6 +81,7 @@ func (d *Definition) Run(ctx context.Context) check.Result {
 				InsecureSkipVerify: !verify,
 			},
 		},
+		CheckRedirect: checkRedirects,
 	}
 
 	// Save match strings
@@ -190,6 +204,31 @@ func request(ctx context.Context, client *http.Client, r Request) (bool, *string
 		}
 		matches := regex.FindSubmatch(body)
 		matchStr = fmt.Sprintf("%s", matches[len(matches)-1])
+	}
+
+	if r.MatchHeaders && r.HeadersRegex != nil {
+		for name, regexExp := range r.HeadersRegex {
+
+			// attempt to retrieve associated header, if it exists
+			// note - this means it only checks the first occurance of a given header
+			header := resp.Header.Get(name)
+
+			// if header isn't found, fail now
+			if header == "" {
+				return false, nil, fmt.Errorf("missing required header")
+			}
+
+			// attempt to compile regex
+			regex, err := regexp.Compile(regexExp)
+			if err != nil {
+				return false, nil, fmt.Errorf("Error compiling regex string %s : %s", regexExp, err)
+			}
+
+			// attempt to match regex
+			if !regex.MatchString(header) {
+				return false, nil, fmt.Errorf("recieved bad header")
+			}
+		}
 	}
 
 	// If we've reached this point, then the check succeeded
